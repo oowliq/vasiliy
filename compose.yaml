@@ -1,0 +1,14 @@
+services:
+  bot:
+    # Замените OWNER на свой GitHub-логин или организацию (строчными буквами).
+    image: ghcr.io/OWNER/vasiliy:latest
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      STATS_DB_PATH: /app/data/stats.db
+    volumes:
+      - bot-data:/app/data
+
+volumes:
+  bot-data:
