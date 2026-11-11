@@ -1,14 +1,30 @@
 services:
-  bot:
+  vasiliy:
     # Замените OWNER на свой GitHub-логин или организацию (строчными буквами).
     image: ghcr.io/OWNER/vasiliy:latest
     restart: unless-stopped
     init: true
-    env_file: .env
+    env_file:
+      - path: vasiliy.env
+        required: true
     environment:
       STATS_DB_PATH: /app/data/stats.db
+    user: "1000:1000"
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
     volumes:
-      - bot-data:/app/data
+      - vasiliy_data:/app/data
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 256m
+    logging:
+      driver: json-file
+      options:
+        max-size: 25m
+        max-file: "3"
 
 volumes:
-  bot-data:
+  vasiliy_data:

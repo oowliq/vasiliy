@@ -163,13 +163,13 @@ Workflow [`.github/workflows/docker.yml`](.github/workflows/docker.yml) на к�
 ### На сервере
 
 Нужны Docker и Docker Compose. Скопируйте на сервер [`compose.yaml`](compose.yaml), замените в нём
-`OWNER` на свой логин (строчными буквами) и положите рядом `.env` с токеном.
+`OWNER` на свой логин (строчными буквами) и положите рядом `vasiliy.env` с токеном (формат как в `.env.example`).
 
 ```bash
 docker compose up -d
 ```
 
-База лежит в именованном томе `bot-data` и переживает обновления образа.
+База лежит в именованном томе `vasiliy_data` и переживает обновления образа.
 
 Обновиться до свежего `latest`:
 
@@ -180,13 +180,13 @@ docker compose pull && docker compose up -d
 Логи:
 
 ```bash
-docker compose logs -f bot
+docker compose logs -f vasiliy
 ```
 
 Бэкап базы:
 
 ```bash
-docker compose cp bot:/app/data/stats.db ./stats-backup.db
+docker compose cp vasiliy:/app/data/stats.db ./stats-backup.db
 ```
 
 > Чтобы сервер подтягивал новые образы сам, можно добавить в `compose.yaml` контейнер
