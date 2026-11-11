@@ -1,4 +1,5 @@
-import { WEEK_MS, weekStart } from '../time.js';
+import { reportWeek } from '../time.js';
+import { weeklyTasksRunning } from '../stats/report.js';
 import { handlePurge } from './purge.js';
 import type { Command } from './types.js';
 
@@ -18,40 +19,19 @@ export const adminCommands: Command[] = [
         return;
       }
       const current = app.settings.get(guildId);
-      // Если раньше канала не было, прошлую неделю считаем опубликованной: первые итоги — в ближайшее воскресенье.
-      const lastWeek = weekStart(Date.now()) - WEEK_MS;
+      // Если раньше канала не было, прошлую неделю считаем опубликованной: первые итоги — в ближайший понедельник.
+      const lastWeek = reportWeek(Date.now());
       app.settings.update(guildId, {
         announceChannelId: message.channelId,
         lastReportedWeek: Math.max(current.lastReportedWeek ?? 0, lastWeek),
       });
       await message.reply(
-        'Готово: объявления бота будут приходить сюда. Итоги недели — каждое воскресенье в 18:00 МСК.',
+        'Готово: объявления бота будут приходить сюда. Итоги недели — каждый понедельник в 09:00 МСК.',
       );
     },
   },
-  {
-    name: 'mvprole',
-    admin: true,
-    usage: 'mvprole @роль | off',
-    description: 'Роль, которую каждую неделю получает MVP (больше всех в голосе)',
-    async run({ message, args, app, guildId }) {
-      if (args[0]?.toLowerCase() === 'off') {
-        app.settings.update(guildId, { mvpRoleId: null, mvpUserId: null });
-        await message.reply('Роль MVP больше не выдаётся.');
-        return;
-      }
-      // `<@&id>` или просто id роли.
-      const roleId = /^(?:<@&)?(\d+)>?$/.exec(args[0] ?? '')?.[1] ?? null;
-      if (!roleId) {
-        await message.reply(`Пример: \`${app.prefix}mvprole @MVP\` или \`${app.prefix}mvprole off\``);
-        return;
-      }
-      app.settings.update(guildId, { mvpRoleId: roleId });
-      await message.reply(
-        `Готово: роль <@&${roleId}> будет переходить к MVP недели. Боту нужно право «Управлять ролями», а его роль должна быть выше этой.`,
-      );
-    },
-  },
+  roleCommand('default_role', 'defaultRoleId'),
+  roleCommand('weekly_role', 'weeklyRoleId'),
   {
     name: 'welcome',
     admin: true,
@@ -82,3 +62,62 @@ export const adminCommands: Command[] = [
     },
   },
 ];
+
+function roleCommand(name: string, field: 'defaultRoleId' | 'weeklyRoleId'): Command {
+  return {
+    name,
+    aliases: field === 'weeklyRoleId' ? ['mvprole'] : [],
+    admin: true,
+    usage: `${name} @роль | off`,
+    description: field === 'defaultRoleId' ? 'Роль участников еженедельного конкурса' : 'Роль победителя недели по времени в голосе',
+    async run({ message, args, app, guildId }) {
+      let current = app.settings.get(guildId);
+      if (weeklyTasksRunning(app.settings)) {
+        await message.reply('Бот сейчас подводит итоги. Повторите команду после завершения.');
+        return;
+      }
+      if (args[0]?.toLowerCase() === 'off') {
+        app.settings.update(guildId, { [field]: null, pendingWeek: null, pendingWinnerId: null });
+        await message.reply('Еженедельная выдача ролей отключена. Уже выданные роли сохранены.');
+        return;
+      }
+      if (current.pendingWeek !== null) {
+        await message.reply(`Есть незавершённая выдача. Исправьте права бота или отмените её командой \`${app.prefix}${name} off\`, затем настройте роли заново.`);
+        return;
+      }
+      const roleId = /^(?:<@&(\d+)>|(\d+))$/.exec(args[0] ?? '')?.slice(1).find(Boolean);
+      if (!roleId) {
+        await message.reply(`Пример: \`${app.prefix}${name} @роль\` или \`${app.prefix}${name} off\``);
+        return;
+      }
+      const other = field === 'defaultRoleId' ? current.weeklyRoleId : current.defaultRoleId;
+      if (roleId === other || roleId === guildId) {
+        await message.reply('Нужны две разные роли, отличные от @everyone.');
+        return;
+      }
+      const guild = await app.client.guilds.resolve(guildId);
+      await guild.fetchRoles();
+      const role = guild.roles.get(roleId);
+      if (!role) {
+        await message.reply('Роль не найдена. Выберите роль этого сервера.');
+        return;
+      }
+      current = app.settings.get(guildId);
+      if (weeklyTasksRunning(app.settings) || current.pendingWeek !== null) {
+        await message.reply('Выдача ролей уже началась. Повторите команду после завершения.');
+        return;
+      }
+      const latestOther = field === 'defaultRoleId' ? current.weeklyRoleId : current.defaultRoleId;
+      if (roleId === latestOther) {
+        await message.reply('Нужны две разные роли.');
+        return;
+      }
+      app.settings.update(guildId, {
+        [field]: roleId,
+        // Первое назначение — в ближайший понедельник, без выдачи за старые недели.
+        lastAwardedWeek: Math.max(current.lastAwardedWeek ?? -Infinity, reportWeek(Date.now())),
+      });
+      await message.reply(`Готово: ${name} — <@&${roleId}>. Выдача и итоги — в понедельник в 09:00 МСК. Боту нужны права «Управлять ролями», а его роль должна быть выше обеих настроенных ролей.`);
+    },
+  };
+}

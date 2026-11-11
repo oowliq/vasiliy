@@ -10,20 +10,20 @@ export const WEEK_MS = 7 * DAY_MS;
 
 const MSK_OFFSET_MS = 3 * HOUR_MS;
 
-/** Недельный отчёт: воскресенье 18:00 МСК. */
-const REPORT_HOUR_MSK = 18;
 /** Ночь для «Полуночника»: 00:00–06:00 МСК. */
 const NIGHT_END_HOUR_MSK = 6;
 
-/**
- * Первая граница недели после эпохи: 4 января 1970 (воскресенье) 18:00 МСК.
- * 1 января 1970 — четверг, до воскресенья 3 дня.
- */
-const WEEK_ANCHOR_MS = 3 * DAY_MS + REPORT_HOUR_MSK * HOUR_MS - MSK_OFFSET_MS;
+/** 5 января 1970, понедельник 00:00 МСК. */
+const WEEK_ANCHOR_MS = 4 * DAY_MS - MSK_OFFSET_MS;
 
-/** Начало статистической недели (воскресенье 18:00 МСК), в которую попадает `at`. */
+/** Начало календарной недели по МСК (понедельник 00:00). */
 export function weekStart(at: number): number {
   return WEEK_ANCHOR_MS + Math.floor((at - WEEK_ANCHOR_MS) / WEEK_MS) * WEEK_MS;
+}
+
+/** Последняя неделя, для которой наступил срок объявления: понедельник 09:00 МСК. */
+export function reportWeek(at: number): number {
+  return weekStart(at - 9 * HOUR_MS) - WEEK_MS;
 }
 
 /** Полночь по МСК дня, в который попадает `at`. */

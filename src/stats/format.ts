@@ -49,7 +49,7 @@ function topBlocks(store: StatsStore, guildId: string, week: number): string[] {
 
 /** Топ текущей недели (промежуточный). */
 export function formatTop(store: StatsStore, guildId: string, week: number): string {
-  const header = `📊 **Топ текущей недели** (${period(week)}, итоги в воскресенье в 18:00)`;
+  const header = `📊 **Топ текущей недели** (${period(week)}, итоги в понедельник в 09:00 МСК)`;
   const blocks = topBlocks(store, guildId, week);
   if (blocks.length === 0) return `${header}\n\nЗа эту неделю пока ничего не набралось.`;
   return `${header}\n\n${blocks.join('\n\n')}`;
@@ -70,14 +70,14 @@ const maxBy = (rows: UserCounters[], score: (c: Counters) => number) => {
 };
 
 /** Шуточные номинации недели. */
-export function nominate(store: StatsStore, guildId: string, week: number): Nominations {
+export function nominate(store: StatsStore, guildId: string, week: number, winnerId?: string | null): Nominations {
   const rows = store.getWeekAll(guildId, week);
   const lines: string[] = [];
   const add = (row: UserCounters | null, title: string, detail: (c: Counters) => string) => {
     if (row) lines.push(`${title} — ${mention(row.userId)} (${detail(row.counters)})`);
   };
 
-  const mvp = maxBy(rows, (c) => c.voice_ms);
+  const mvp = winnerId === undefined ? maxBy(rows, (c) => c.voice_ms) : rows.find((r) => r.userId === winnerId) ?? null;
   add(mvp, '👑 **MVP недели**', (c) => `${formatDuration(c.voice_ms)} в голосе`);
   add(maxBy(rows, (c) => c.afk_moves), '💤 **Король AFK**', (c) => formatTimes(c.afk_moves));
   add(
@@ -104,9 +104,9 @@ export function nominate(store: StatsStore, guildId: string, week: number): Nomi
 }
 
 /** Итоговый отчёт по завершённой неделе: номинации + топы. */
-export function formatWeeklyReport(store: StatsStore, guildId: string, week: number): Nominations {
-  const nominations = nominate(store, guildId, week);
-  const header = `📊 **Итоги недели** (${period(week)})`;
+export function formatWeeklyReport(store: StatsStore, guildId: string, week: number, winnerId?: string | null): Nominations {
+  const nominations = nominate(store, guildId, week, winnerId);
+  const header = `📊 **Итоги недели** (${period(week)})${winnerId === null ? '\n\nВ конкурсе на weekly_role нет победителя.' : ''}`;
   if (!nominations.text) {
     return { text: `${header}\n\nНа этой неделе было тихо. Подозрительно тихо.`, mvpUserId: null };
   }

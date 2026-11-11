@@ -10,8 +10,8 @@ import { VoiceTracker, type TrackerHooks, type VoiceSnapshot } from './tracker.j
 const G = 'guild';
 const AFK = 'afk-channel';
 
-/** Воскресенье 08.11.2026 18:00 МСК = 15:00 UTC. */
-const SUNDAY_18_MSK = Date.UTC(2026, 10, 8, 15, 0);
+/** Понедельник 09.11.2026 00:00 МСК = 21:00 UTC. */
+const WEEK_START = Date.UTC(2026, 10, 8, 21, 0);
 /** Понедельник 09.11.2026 00:00 МСК. */
 const MONDAY_MSK = Date.UTC(2026, 10, 8, 21, 0);
 
@@ -34,17 +34,17 @@ function setup(start: number, hooks: TrackerHooks = {}) {
 }
 
 describe('week', () => {
-  it('неделя начинается в воскресенье 18:00 МСК', () => {
-    assert.equal(weekStart(SUNDAY_18_MSK), SUNDAY_18_MSK);
-    assert.equal(weekStart(SUNDAY_18_MSK - 1), SUNDAY_18_MSK - WEEK_MS);
-    assert.equal(weekStart(SUNDAY_18_MSK + 3 * DAY_MS), SUNDAY_18_MSK);
-    assert.equal(formatMsk(SUNDAY_18_MSK), '08.11 18:00');
+  it('неделя начинается в понедельник 00:00 МСК', () => {
+    assert.equal(weekStart(WEEK_START), WEEK_START);
+    assert.equal(weekStart(WEEK_START - 1), WEEK_START - WEEK_MS);
+    assert.equal(weekStart(WEEK_START + 3 * DAY_MS), WEEK_START);
+    assert.equal(formatMsk(WEEK_START), '09.11 00:00');
   });
 });
 
 describe('VoiceTracker', () => {
   it('считает время в канале, мьюты, стрим и камеру', () => {
-    const t = setup(SUNDAY_18_MSK + HOUR_MS);
+    const t = setup(WEEK_START + HOUR_MS);
     t.state('u1', 'voice');
     t.advance(30 * MIN);
     t.state('u1', 'voice', { selfMute: true, stream: true });
@@ -53,17 +53,17 @@ describe('VoiceTracker', () => {
     t.advance(10 * MIN);
     t.state('u1', null);
 
-    const c = t.store.getWeek(G, 'u1', SUNDAY_18_MSK);
+    const c = t.store.getWeek(G, 'u1', WEEK_START);
     assert.equal(c.voice_ms, 60 * MIN);
     assert.equal(c.self_mute_ms, 20 * MIN, 'самомьют не считается поверх серверного');
     assert.equal(c.server_mute_ms, 10 * MIN);
     assert.equal(c.stream_ms, 20 * MIN);
     assert.equal(c.video_ms, 10 * MIN);
-    assert.equal(c.night_ms, 0);
+    assert.equal(c.night_ms, 60 * MIN);
   });
 
   it('считает попадания в AFK и время там отдельно', () => {
-    const t = setup(SUNDAY_18_MSK + HOUR_MS);
+    const t = setup(WEEK_START + HOUR_MS);
     t.state('u1', 'voice');
     t.advance(10 * MIN);
     t.state('u1', AFK);
@@ -76,7 +76,7 @@ describe('VoiceTracker', () => {
     t.advance(MIN);
     t.tracker.flush();
 
-    const c = t.store.getWeek(G, 'u1', SUNDAY_18_MSK);
+    const c = t.store.getWeek(G, 'u1', WEEK_START);
     assert.equal(c.afk_moves, 2);
     assert.equal(c.afk_ms, 11 * MIN);
     assert.equal(c.voice_ms, 11 * MIN);
@@ -84,37 +84,37 @@ describe('VoiceTracker', () => {
   });
 
   it('делит сессию по границе недели', () => {
-    const t = setup(SUNDAY_18_MSK - 30 * MIN);
+    const t = setup(WEEK_START - 30 * MIN);
     t.state('u1', 'voice');
     t.advance(HOUR_MS);
     t.tracker.flush();
 
-    assert.equal(t.store.getWeek(G, 'u1', SUNDAY_18_MSK - WEEK_MS).voice_ms, 30 * MIN);
-    assert.equal(t.store.getWeek(G, 'u1', SUNDAY_18_MSK).voice_ms, 30 * MIN);
+    assert.equal(t.store.getWeek(G, 'u1', WEEK_START - WEEK_MS).voice_ms, 30 * MIN);
+    assert.equal(t.store.getWeek(G, 'u1', WEEK_START).voice_ms, 30 * MIN);
     assert.equal(t.store.getTotal(G, 'u1').voice_ms, HOUR_MS);
   });
 
   it('повторный flush не задваивает время', () => {
-    const t = setup(SUNDAY_18_MSK + HOUR_MS);
+    const t = setup(WEEK_START + HOUR_MS);
     t.state('u1', 'voice');
     t.advance(10 * MIN);
     t.tracker.flush();
     t.tracker.flush();
     t.advance(5 * MIN);
     t.tracker.flush();
-    assert.equal(t.store.getWeek(G, 'u1', SUNDAY_18_MSK).voice_ms, 15 * MIN);
+    assert.equal(t.store.getWeek(G, 'u1', WEEK_START).voice_ms, 15 * MIN);
   });
 
   it('sync закрывает сессии тех, кого больше нет в голосе', () => {
-    const t = setup(SUNDAY_18_MSK + HOUR_MS);
+    const t = setup(WEEK_START + HOUR_MS);
     t.state('u1', 'voice');
     t.state('u2', 'voice');
     t.advance(10 * MIN);
     t.tracker.sync(G, []);
     t.advance(10 * MIN);
     t.tracker.flush();
-    assert.equal(t.store.getWeek(G, 'u1', SUNDAY_18_MSK).voice_ms, 10 * MIN);
-    assert.equal(t.store.getWeek(G, 'u2', SUNDAY_18_MSK).voice_ms, 10 * MIN);
+    assert.equal(t.store.getWeek(G, 'u1', WEEK_START).voice_ms, 10 * MIN);
+    assert.equal(t.store.getWeek(G, 'u2', WEEK_START).voice_ms, 10 * MIN);
   });
 
   it('считает ночное время 00:00–06:00 МСК', () => {
@@ -122,13 +122,13 @@ describe('VoiceTracker', () => {
     t.state('u1', 'voice');
     t.advance(8 * HOUR_MS); // до пн 07:00
     t.tracker.flush();
-    const c = t.store.getWeek(G, 'u1', SUNDAY_18_MSK);
+    const c = t.store.getTotal(G, 'u1');
     assert.equal(c.voice_ms, 8 * HOUR_MS);
     assert.equal(c.night_ms, 6 * HOUR_MS);
   });
 
   it('считает совместное время пар без двойного учёта', () => {
-    const t = setup(SUNDAY_18_MSK + HOUR_MS);
+    const t = setup(WEEK_START + HOUR_MS);
     t.state('a', 'voice');
     t.advance(10 * MIN);
     t.state('b', 'voice'); // a один 10 минут
@@ -143,10 +143,10 @@ describe('VoiceTracker', () => {
     t.tracker.flush();
 
     const pairs = Object.fromEntries(
-      t.store.getTopPairs(G, SUNDAY_18_MSK, 10).map((p) => [`${p.userA}+${p.userB}`, p.ms]),
+      t.store.getTopPairs(G, WEEK_START, 10).map((p) => [`${p.userA}+${p.userB}`, p.ms]),
     );
     assert.deepEqual(pairs, { 'a+b': 35 * MIN, 'a+c': 20 * MIN, 'b+c': 15 * MIN });
-    assert.deepEqual(t.store.getBestPartner(G, 'a', SUNDAY_18_MSK), { userId: 'b', ms: 35 * MIN });
+    assert.deepEqual(t.store.getBestPartner(G, 'a', WEEK_START), { userId: 'b', ms: 35 * MIN });
   });
 
   it('отмечает дни в голосе и сообщает о новых', () => {
@@ -163,7 +163,7 @@ describe('VoiceTracker', () => {
 
   it('вызывает onJoin только при входе в голос, не в AFK', () => {
     const joins: string[] = [];
-    const t = setup(SUNDAY_18_MSK, { onJoin: (_g, u) => joins.push(u) });
+    const t = setup(WEEK_START, { onJoin: (_g, u) => joins.push(u) });
     t.state('a', 'voice');
     t.state('a', 'other');
     t.state('b', AFK);
@@ -201,9 +201,9 @@ describe('StatsStore', () => {
 describe('format', () => {
   it('строит топ, сортируя по убыванию и пропуская пустые разделы', () => {
     const store = new StatsStore(openDatabase(':memory:'));
-    store.add(G, 'a', SUNDAY_18_MSK, { voice_ms: HOUR_MS, messages: 3 });
-    store.add(G, 'b', SUNDAY_18_MSK, { voice_ms: 2 * HOUR_MS });
-    const text = formatTop(store, G, SUNDAY_18_MSK);
+    store.add(G, 'a', WEEK_START, { voice_ms: HOUR_MS, messages: 3 });
+    store.add(G, 'b', WEEK_START, { voice_ms: 2 * HOUR_MS });
+    const text = formatTop(store, G, WEEK_START);
 
     assert.match(text, /Топ текущей недели/);
     assert.ok(text.indexOf('1. <@b> — 2 ч') < text.indexOf('2. <@a> — 1 ч'));
@@ -213,7 +213,7 @@ describe('format', () => {
 
   it('выбирает номинантов и MVP', () => {
     const store = new StatsStore(openDatabase(':memory:'));
-    const w = SUNDAY_18_MSK;
+    const w = WEEK_START;
     store.add(G, 'loud', w, { voice_ms: 10 * HOUR_MS, self_mute_ms: HOUR_MS, messages: 50 });
     store.add(G, 'quiet', w, { voice_ms: 3 * HOUR_MS, self_mute_ms: 2 * HOUR_MS, afk_moves: 4 });
     // Почти всё время в мьюте, но в голосе меньше 2 часов — в «Молчуны» не попадает.
@@ -232,7 +232,7 @@ describe('format', () => {
 
   it('пишет про тихую неделю без активности', () => {
     const store = new StatsStore(openDatabase(':memory:'));
-    const report = formatWeeklyReport(store, G, SUNDAY_18_MSK);
+    const report = formatWeeklyReport(store, G, WEEK_START);
     assert.equal(report.mvpUserId, null);
     assert.match(report.text, /тихо/);
   });
